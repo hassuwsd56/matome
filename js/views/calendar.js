@@ -1,5 +1,6 @@
 import { h } from '../core/dom.js';
 import { formatDateJa, toDateStr, todayStr, WEEKDAYS } from '../core/date.js';
+import { holidayName } from '../core/holidays.js';
 import { allTypes, compareItems } from '../types/registry.js';
 import { itemRow, section } from '../ui/item-row.js';
 import { ICONS } from '../ui/icons.js';
@@ -55,12 +56,14 @@ export default {
       if (d.getMonth() !== m - 1) cls.push('other');
       if (d.getDay() === 0) cls.push('sun');
       if (d.getDay() === 6) cls.push('sat');
+      const holiday = holidayName(ds);
+      if (holiday) cls.push('holiday');
       if (ds === today) cls.push('today');
       if (ds === state.selected) cls.push('selected');
       cells.push(h('button', {
         type: 'button',
         class: cls.join(' '),
-        'aria-label': formatDateJa(ds),
+        'aria-label': holiday ? `${formatDateJa(ds)} ${holiday}` : formatDateJa(ds),
         onclick: () => go({ selected: ds, month: ds.slice(0, 7) }),
       },
         h('span', { class: 'num' }, d.getDate()),
@@ -70,10 +73,11 @@ export default {
     }
 
     const dayItems = itemsOn(state.selected).sort(compareItems);
+    const selHoliday = holidayName(state.selected);
     el.append(
       head,
       h('div', { class: 'cal-grid' }, cells),
-      section(formatDateJa(state.selected), dayItems.length
+      section(formatDateJa(state.selected) + (selHoliday ? `　${selHoliday}` : ''), dayItems.length
         ? dayItems.map((it) => itemRow(it, ctx))
         : h('p', { class: 'empty' }, '予定・タスクはありません'))
     );

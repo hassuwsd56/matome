@@ -41,10 +41,11 @@ export default {
 
   todaySections: [
     {
+      // 期限切れ・今日・今後のタスクをすべて期限順に表示
       title: 'タスク',
       order: 20,
-      filter: (it, today) => it.due && it.due <= today && visibleToday(it),
-      empty: '今日までのタスクはありません',
+      filter: (it) => it.due && visibleToday(it),
+      empty: '期限のあるタスクはありません',
     },
     {
       title: '期限なしのタスク',

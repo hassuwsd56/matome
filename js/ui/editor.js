@@ -2,6 +2,40 @@ import { h } from '../core/dom.js';
 import { allTypes, getType } from '../types/registry.js';
 import { toast } from './toast.js';
 
+// シート表示中は背面ページを固定する（iPhone では overflow:hidden だけでは背面がスクロールする）
+let lockedY = null;
+function lockScroll() {
+  if (lockedY !== null) return;
+  lockedY = window.scrollY;
+  Object.assign(document.body.style, { position: 'fixed', top: `-${lockedY}px`, left: '0', right: '0', width: '100%' });
+}
+function unlockScroll() {
+  if (lockedY === null) return;
+  const y = lockedY;
+  lockedY = null;
+  Object.assign(document.body.style, { position: '', top: '', left: '', right: '', width: '' });
+  window.scrollTo(0, y);
+}
+
+// キーボードが出たら、シートを「見えている範囲（キーボードの上）」に収める。
+// iPhone はキーボード表示時に画面全体を上へずらすため、そのままだとシート上部が画面外に出てしまう。
+function fitToVisibleArea(sheet) {
+  const vv = window.visualViewport;
+  if (!vv) return () => {};
+  const update = () => {
+    const hiddenBelow = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+    sheet.style.bottom = `${hiddenBelow}px`;
+    sheet.style.maxHeight = `calc(${vv.height}px - var(--safe-top) - 16px)`;
+  };
+  update();
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  return () => {
+    vv.removeEventListener('resize', update);
+    vv.removeEventListener('scroll', update);
+  };
+}
+
 function defaultsFor(type, ctx) {
   const v = {};
   for (const f of type.fields) {
@@ -18,14 +52,24 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
 
   const root = document.getElementById('sheet-root');
   const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' });
-  const backdrop = h('div', { class: 'backdrop', onclick: close });
+  const openedAt = Date.now();
+  // 開いた時のタップが背景に届いてすぐ閉じるのを防ぐ
+  const backdrop = h('div', { class: 'backdrop', onclick: () => { if (Date.now() - openedAt > 400) close(); } });
   root.replaceChildren(backdrop, sheet);
   document.body.classList.add('sheet-open');
+  lockScroll();
+  const stopFitting = fitToVisibleArea(sheet);
   requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('open')));
 
+  let closed = false;
   function close() {
+    if (closed) return;
+    closed = true;
+    document.activeElement?.blur?.();
+    stopFitting();
     root.classList.remove('open');
     document.body.classList.remove('sheet-open');
+    unlockScroll();
     setTimeout(() => { if (!root.classList.contains('open')) root.replaceChildren(); }, 300);
   }
 
@@ -128,5 +172,5 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
   }
 
   render();
-  if (isNew) sheet.querySelector('input[type=text], textarea')?.focus();
+  if (isNew) sheet.querySelector('input[type=text], textarea')?.focus({ preventScroll: true });
 }

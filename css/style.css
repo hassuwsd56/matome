@@ -115,6 +115,7 @@ main { max-width: 640px; margin: 0 auto; padding: 4px 16px calc(var(--tabbar-h) 
 .wd { padding: 4px 0; text-align: center; font-size: 12px; color: var(--muted); }
 .wd.sun, .day.sun .num { color: #ff6961; }
 .wd.sat, .day.sat .num { color: #64d2ff; }
+.day.holiday .num { color: #ff6961; }
 .day {
   min-height: 52px; padding-top: 4px; border-radius: 10px;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -162,7 +163,7 @@ main { max-width: 640px; margin: 0 auto; padding: 4px 16px calc(var(--tabbar-h) 
 #sheet-root.open .sheet { transform: none; }
 .sheet-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 0.5px solid var(--border); }
 .sheet-title { font-weight: 600; }
-.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px calc(28px + var(--safe-bottom)); }
+.sheet-body { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 16px 16px calc(28px + var(--safe-bottom)); }
 .link-btn { padding: 4px; color: var(--accent); font-size: 16px; }
 .link-btn.strong { font-weight: 700; }
 
