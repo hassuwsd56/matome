@@ -1,6 +1,6 @@
 // オフライン対応用の Service Worker
 // 方針: ネットにつながる時は最新版を取得してキャッシュを更新、つながらない時はキャッシュを使う
-const CACHE = 'matome-v3';
+const CACHE = 'matome-v4';
 const SHELL = ['./', './index.html', './css/style.css', './js/app.js', './manifest.webmanifest', './icons/icon-180.png'];
 
 self.addEventListener('install', (e) => {
@@ -17,7 +17,16 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  if (req.method !== 'GET') return;
+  // Firebase の部品（版番号つきで中身が変わらない）は、一度取ったらキャッシュから出す
+  if (req.url.startsWith('https://www.gstatic.com/firebasejs/')) {
+    e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
+      return res;
+    })));
+    return;
+  }
+  if (new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(req)
       .then((res) => {

@@ -19,7 +19,7 @@ export default {
       const q = query.trim().toLowerCase();
       const memos = ctx.store
         .items((it) => it.type === 'memo' && (!q || `${it.title || ''}\n${it.body || ''}`.toLowerCase().includes(q)))
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
       listEl.replaceChildren(...(memos.length
         ? memos.map((it) => itemRow(it, ctx))
         : [h('p', { class: 'empty' }, q ? '見つかりませんでした' : 'メモはまだありません')]));

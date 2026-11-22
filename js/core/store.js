@@ -66,6 +66,11 @@ export class Store {
     await this._commit();
   }
 
+  // 共有カレンダーはクラウド保存（CloudStore）の時だけ使える
+  calendars() { return []; }
+  calendar() { return null; }
+  canEdit() { return true; }
+
   snapshot() {
     return JSON.parse(JSON.stringify(this.data));
   }

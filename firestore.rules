@@ -1,0 +1,84 @@
+rules_version = '2';
+
+// まとめ帳のセキュリティルール（Firebase コンソールの Firestore →「ルール」に貼り付ける）
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    // 自分だけのデータ（予定・タスク・メモ・表示名）: 本人だけが読み書きできる
+    match /users/{uid}/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // 共有カレンダー
+    match /calendars/{cid} {
+      function me() { return request.auth.uid; }
+      function isMember() { return signedIn() && me() in resource.data.memberIds; }
+      function isOwner() { return signedIn() && resource.data.roles[me()] == 'owner'; }
+      function validRole(r) { return r in ['editor', 'viewer']; }
+
+      // オーナーの変更: オーナー自身は外せない・オーナーは 1 人のまま
+      function ownerUpdate() {
+        let d = request.resource.data;
+        return isOwner()
+          && d.owner == resource.data.owner
+          && d.roles[resource.data.owner] == 'owner'
+          && resource.data.owner in d.memberIds
+          && d.memberIds.size() == d.roles.size();
+      }
+
+      // 招待リンクで参加: 有効な招待のトークンと権限が一致する時だけ、自分を追加できる
+      function joining() {
+        let d = request.resource.data;
+        let t = d.lastJoin;
+        return signedIn()
+          && !(me() in resource.data.memberIds)
+          && d.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'roles', 'names', 'lastJoin'])
+          && t in resource.data.invites
+          && resource.data.invites[t].expiresAt > request.time
+          && d.memberIds.toSet() == resource.data.memberIds.toSet().union([me()].toSet())
+          && d.memberIds.size() == resource.data.memberIds.size() + 1
+          && d.roles.diff(resource.data.roles).affectedKeys().hasOnly([me()])
+          && d.roles[me()] == resource.data.invites[t].role
+          && validRole(d.roles[me()])
+          && d.names.diff(resource.data.names).affectedKeys().hasOnly([me()]);
+      }
+
+      // 自分で抜ける（オーナー以外）
+      function leaving() {
+        let d = request.resource.data;
+        return isMember()
+          && resource.data.roles[me()] != 'owner'
+          && d.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'roles', 'names'])
+          && d.memberIds.toSet() == resource.data.memberIds.toSet().difference([me()].toSet())
+          && d.roles.diff(resource.data.roles).affectedKeys().hasOnly([me()])
+          && !(me() in d.roles);
+      }
+
+      // 自分の表示名を変える
+      function renaming() {
+        let d = request.resource.data;
+        return isMember()
+          && d.diff(resource.data).affectedKeys().hasOnly(['names'])
+          && d.names.diff(resource.data.names).affectedKeys().hasOnly([me()]);
+      }
+
+      allow read: if isMember();
+      allow create: if signedIn()
+        && request.resource.data.owner == me()
+        && request.resource.data.memberIds == [me()]
+        && request.resource.data.roles.keys().hasOnly([me()])
+        && request.resource.data.roles[me()] == 'owner';
+      allow update: if ownerUpdate() || joining() || leaving() || renaming();
+      allow delete: if isOwner();
+
+      // 共有カレンダーの予定: メンバーは読める。オーナーと「編集できる」人は書ける
+      match /events/{eid} {
+        function cal() { return get(/databases/$(database)/documents/calendars/$(cid)).data; }
+        allow read: if signedIn() && request.auth.uid in cal().memberIds;
+        allow write: if signedIn() && cal().roles[request.auth.uid] in ['owner', 'editor'];
+      }
+    }
+  }
+}

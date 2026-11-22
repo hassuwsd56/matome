@@ -6,12 +6,14 @@ import { openDaySheet } from '../ui/day-sheet.js';
 import { ICONS } from '../ui/icons.js';
 
 // 画面を切り替えても表示中の月・選んだ日を覚えておく
-const state = { month: null, selected: null }; // month: "YYYY-MM"
+const state = { month: null, selected: null, slideFrom: null }; // month: "YYYY-MM"、slideFrom: 月を変えた時に新しい月が入ってくる向き
 
 // 週の行の中の寸法（px）: 日付の数字の高さ・帯 1 本の高さ・「+2」の高さ
 const NUM_H = 24;
 const BAR_H = 17;
 const MORE_H = 14;
+// 月を切り替える時の横の動きの時間（ミリ秒）
+const SLIDE_MS = 350;
 
 function shiftMonth(month, n) {
   const [y, m] = month.split('-').map(Number);
@@ -88,14 +90,15 @@ export default {
 
     const head = h('div', { class: 'cal-head' },
       h('div', { class: 'month' }, `${y}年${m}月`),
-      h('button', { type: 'button', class: 'icon-btn', 'aria-label': '前の月', onclick: () => go({ month: shiftMonth(state.month, -1) }) }, '‹'),
+      h('button', { type: 'button', class: 'icon-btn', 'aria-label': '前の月', onclick: () => go({ month: shiftMonth(state.month, -1), slideFrom: 'left' }) }, '‹'),
       h('button', { type: 'button', class: 'pill-btn', onclick: () => go({ month: today.slice(0, 7), selected: today }) }, '今日'),
-      h('button', { type: 'button', class: 'icon-btn', 'aria-label': '次の月', onclick: () => go({ month: shiftMonth(state.month, 1) }) }, '›')
+      h('button', { type: 'button', class: 'icon-btn', 'aria-label': '次の月', onclick: () => go({ month: shiftMonth(state.month, 1), slideFrom: 'right' }) }, '›')
     );
     const wdRow = h('div', { class: 'cal-wd' }, WEEKDAYS.map((w, i) =>
       h('div', { class: `wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}` }, w)));
     const weeksEl = h('div', { class: 'cal-weeks' });
-    el.append(head, wdRow, weeksEl);
+    const wrap = h('div', { class: 'cal' }, head, wdRow, weeksEl); // 指の動きはこの中だけで扱う
+    el.append(wrap);
 
     // 画面の残りの高さを週の数で割って、1 週の高さを決める
     const tabbarH = document.getElementById('tabbar')?.offsetHeight || 0;
@@ -142,7 +145,7 @@ export default {
         if (b.it?.done) cls.push('done');
         if (b.contL) cls.push('cont-l');
         if (b.contR) cls.push('cont-r');
-        const color = b.it ? getType(b.it.type).color : null;
+        const color = b.it ? (ctx.store.calendar?.(b.it.calendarId)?.color || getType(b.it.type).color) : null;
         return h('div', {
           class: cls.join(' '),
           style: `grid-column:${b.c0 + 1} / ${b.c1 + 2};grid-row:${b.lane + 1};${color ? `background:${color}` : ''}`,
@@ -155,13 +158,46 @@ export default {
       ));
     }
 
-    // 左右のスワイプで月を切り替える
-    let sx = 0, sy = 0;
-    weeksEl.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
-    weeksEl.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - sx;
-      const dy = e.changedTouches[0].clientY - sy;
-      if (Math.abs(dx) > 60 && Math.abs(dy) < 40) go({ month: shiftMonth(state.month, dx < 0 ? 1 : -1) });
+    // 月を変えた直後: 新しい月を横からすべり込ませる
+    if (state.slideFrom) {
+      const from = state.slideFrom === 'right' ? 1 : -1;
+      state.slideFrom = null;
+      weeksEl.style.transform = `translateX(${from * 35}%)`;
+      weeksEl.style.opacity = '0';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        weeksEl.style.transition = `transform ${SLIDE_MS}ms ease-out, opacity ${SLIDE_MS}ms ease-out`;
+        weeksEl.style.transform = '';
+        weeksEl.style.opacity = '';
+      }));
+    }
+
+    // 指に合わせて横に動かし、離した時に一定以上動いていれば月を切り替える。上下には動かさない。
+    let sx = 0, sy = 0, dx = 0, lock = null;
+    wrap.addEventListener('touchstart', (e) => {
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; lock = null;
+      weeksEl.style.transition = 'none';
     }, { passive: true });
+    wrap.addEventListener('touchmove', (e) => {
+      const x = e.touches[0].clientX - sx;
+      const y = e.touches[0].clientY - sy;
+      if (!lock && (Math.abs(x) > 8 || Math.abs(y) > 8)) lock = Math.abs(x) > Math.abs(y) ? 'h' : 'v';
+      if (!lock) return;
+      e.preventDefault(); // 画面が上下に動かないようにする
+      if (lock === 'h') { dx = x; weeksEl.style.transform = `translateX(${x}px)`; }
+    }, { passive: false });
+    wrap.addEventListener('touchend', () => {
+      if (lock !== 'h') return;
+      const w = weeksEl.offsetWidth || window.innerWidth;
+      if (Math.abs(dx) > Math.min(80, w * 0.2)) {
+        const next = dx < 0;
+        weeksEl.style.transition = `transform ${SLIDE_MS}ms ease-in, opacity ${SLIDE_MS}ms ease-in`;
+        weeksEl.style.transform = `translateX(${next ? -w : w}px)`;
+        weeksEl.style.opacity = '0';
+        setTimeout(() => go({ month: shiftMonth(state.month, next ? 1 : -1), slideFrom: next ? 'right' : 'left' }), SLIDE_MS);
+      } else {
+        weeksEl.style.transition = 'transform 250ms ease-out';
+        weeksEl.style.transform = '';
+      }
+    });
   },
 };

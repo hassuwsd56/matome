@@ -7,6 +7,9 @@ export function itemRow(item, ctx, opts = {}) {
   const type = getType(item.type);
   if (!type) return null;
   const info = type.rowInfo(item, opts);
+  // 共有カレンダーの予定は、カレンダーの色と名前を出す
+  const cal = item.calendarId ? ctx.store.calendar?.(item.calendarId) : null;
+  if (cal) info.sub = [cal.name, info.sub].filter(Boolean).join('・');
 
   const lead = type.checkable
     ? h('button', {
@@ -18,7 +21,7 @@ export function itemRow(item, ctx, opts = {}) {
           ctx.store.update(item.id, type.toggleDone(item)).catch(() => toast('保存に失敗しました'));
         },
       })
-    : h('span', { class: 'type-dot', style: `background:${type.color}` });
+    : h('span', { class: 'type-dot', style: `background:${cal?.color || type.color}` });
 
   const open = () => ctx.openEditor({ item });
   return h(

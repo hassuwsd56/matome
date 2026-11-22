@@ -20,6 +20,8 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
   let type = getType(item?.type ?? typeId ?? allTypes()[0].id);
   let values = isNew ? defaultsFor(type, ctx) : { ...item };
   if (!isNew && type.normalize) values = type.normalize(values);
+  // 共有カレンダーの「見るだけ」の予定は、表示のみ（保存・削除できない）
+  const readOnly = !isNew && store.canEdit && !store.canEdit(item);
 
   const root = document.getElementById('sheet-root');
   const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' });
@@ -97,16 +99,26 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
   function control(f, id) {
     const set = (e) => changed(f.key, e.target.value);
     let el;
-    if (f.input === 'textarea') {
+    if (f.input === 'select') {
+      el = h('select', { id, onchange: set }, selectOptions(f).map((o) => {
+        const opt = h('option', { value: o.value }, o.label);
+        if ((values[f.key] || '') === o.value) opt.selected = true;
+        return opt;
+      }));
+    } else if (f.input === 'textarea') {
       el = h('textarea', { id, rows: f.rows || 4, placeholder: f.placeholder, value: values[f.key] || '', oninput: set });
     } else if (f.input === 'date' || f.input === 'time') {
       el = h('input', { id, type: f.input, value: values[f.key] || '', oninput: set, onchange: set });
     } else {
       el = h('input', { id, type: 'text', placeholder: f.placeholder, value: values[f.key] || '', oninput: set, enterkeyhint: 'done' });
     }
+    if (readOnly) el.disabled = true;
     inputs.set(f.key, el);
     return el;
   }
+
+  // 選択肢（options(store, item) が返す [{ value, label }]）
+  const selectOptions = (f) => f.options?.(store, item) || [];
 
   function fieldEl(f) {
     const id = `f-${f.key}`;
@@ -115,14 +127,14 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
       return h('label', { class: 'field-toggle' },
         h('span', null, f.label),
         h('input', {
-          type: 'checkbox', id, class: 'switch', checked: !!values[f.key],
+          type: 'checkbox', id, class: 'switch', checked: !!values[f.key], disabled: readOnly,
           onchange: (e) => { changed(f.key, e.target.checked); render(); },
         })
       );
     }
 
     const input = control(f, id);
-    const ctl = (f.input === 'date' || f.input === 'time') && !f.required
+    const ctl = (f.input === 'date' || f.input === 'time') && !f.required && !readOnly
       ? h('div', { class: 'with-clear' }, input,
           h('button', { type: 'button', class: 'link-btn', onclick: () => { changed(f.key, ''); input.value = ''; } }, 'クリア'))
       : input;
@@ -136,7 +148,7 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
       h('div', { class: 'field-row' }, fields.map((f) => {
         const el = control(f, `f-${f.key}`);
         el.setAttribute('aria-label', f.label);
-        if (f.required || f.input !== 'time') return el;
+        if (f.required || f.input !== 'time' || readOnly) return el;
         // 時刻は「×」で未定に戻せる
         return [el, h('button', {
           type: 'button', class: 'clear-btn', 'aria-label': `${f.label}をクリア`,
@@ -147,7 +159,8 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
 
   function formItems() {
     const out = [];
-    const visible = type.fields.filter((f) => !isHidden(f));
+    // 選択肢が 1 つしかない select（共有カレンダーがない時のカレンダー欄）は出さない
+    const visible = type.fields.filter((f) => !isHidden(f) && !(f.input === 'select' && selectOptions(f).length <= 1));
     for (let i = 0; i < visible.length; i++) {
       const f = visible[i];
       if (!f.group) { out.push(fieldEl(f)); continue; }
@@ -185,15 +198,17 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
     sheet.classList.toggle('fill', isFillType(type));
     const header = h('div', { class: 'sheet-header' },
       h('button', { type: 'button', class: 'link-btn', onclick: close }, 'キャンセル'),
-      h('div', { class: 'sheet-title' }, isNew ? '新規作成' : type.label),
-      h('button', { type: 'button', class: 'link-btn strong', onclick: save }, isNew ? '追加' : '保存')
+      h('div', { class: 'sheet-title' }, isNew ? '新規作成' : readOnly ? `${type.label}（見るだけ）` : type.label),
+      readOnly
+        ? h('span', { class: 'link-btn placeholder' }, '')
+        : h('button', { type: 'button', class: 'link-btn strong', onclick: save }, isNew ? '追加' : '保存')
     );
     const picker = isNew
       ? h('div', { class: 'segmented' }, allTypes().map((t) =>
           h('button', { type: 'button', class: `seg${t === type ? ' active' : ''}`, onclick: () => switchType(t) }, t.label)))
       : null;
     const form = h('div', { class: 'form' }, formItems());
-    sheet.replaceChildren(header, h('div', { class: 'sheet-body' }, picker, form, isNew ? null : deleteButton()));
+    sheet.replaceChildren(header, h('div', { class: 'sheet-body' }, picker, form, isNew || readOnly ? null : deleteButton()));
   }
 
   render();

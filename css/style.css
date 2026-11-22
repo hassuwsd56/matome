@@ -244,3 +244,41 @@ body.full-screen main { max-width: none; padding: 0 0 calc(var(--tabbar-h) + var
   background: #3a3a3c; color: #fff; font-size: 14px; text-align: center;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
+
+/* ===== ログイン画面・共有カレンダー ===== */
+body.auth-mode .tabbar, body.auth-mode .fab { display: none; }
+.auth { padding-top: 8px; }
+.auth .segmented { margin-bottom: 16px; }
+.auth-form .btn { margin-top: 4px; }
+.auth-links { display: flex; justify-content: flex-end; margin-top: 10px; }
+.banner.info { color: #9ecbff; background: rgba(10, 132, 255, 0.14); border-color: rgba(10, 132, 255, 0.4); }
+.card .field { margin-top: 10px; }
+.card .field input, .card .field select, .form select, .role-select {
+  display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid transparent; border-radius: 10px;
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; outline: none;
+  -webkit-appearance: none; appearance: none;
+}
+.card .with-clear input { flex: 1; min-width: 0; }
+.field select:disabled, .field input:disabled, .field textarea:disabled { opacity: 0.75; }
+.cal-list { margin-top: 10px; }
+.cal-list .row { width: 100%; text-align: left; }
+.chev { color: var(--muted); font-size: 20px; }
+.color-picker { display: flex; gap: 12px; flex-wrap: wrap; padding: 4px 2px; }
+.color-dot { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; }
+.color-dot.on { border-color: #fff; }
+.sub-head { margin: 22px 4px 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.member-actions { display: flex; align-items: center; gap: 8px; }
+.role-select { width: auto; min-height: 36px; padding: 6px 10px; font-size: 15px; }
+.danger-text { color: var(--danger); }
+.muted-text { color: var(--muted); font-size: 14px; margin: 0 4px 8px; }
+.invite-link { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.invite-link input { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 10px; border: 0; background: var(--surface-2); color: var(--muted); font-size: 13px; }
+.cal-sheet .segmented { margin: 0 0 4px; }
+.cal-sheet .hint { color: var(--muted); font-size: 12.5px; margin: 8px 4px; }
+.join-text { font-size: 17px; font-weight: 600; margin: 4px 4px 6px; }
+.link-btn.placeholder { visibility: hidden; }
+
+/* カレンダー画面は上下にスクロールさせない（月の切り替えは横の動き） */
+html:has(body.full-screen), body.full-screen { overflow: hidden; overscroll-behavior: none; height: 100%; }
+body.full-screen main { overflow: hidden; }
+.cal-weeks { will-change: transform; }

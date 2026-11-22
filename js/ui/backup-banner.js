@@ -4,7 +4,8 @@ import { BACKUP_REMIND_DAYS } from '../config.js';
 
 // バックアップの押し忘れ注意。必要ない時は null を返す。
 export function backupBanner(ctx) {
-  if (ctx.store.items().length === 0) return null;
+  // クラウドに保存している時は不要
+  if (ctx.store.isCloud || ctx.store.items().length === 0) return null;
   const last = ctx.store.getMeta('lastBackupAt');
   const days = last ? daysSince(last) : null;
   if (last && days < BACKUP_REMIND_DAYS) return null;

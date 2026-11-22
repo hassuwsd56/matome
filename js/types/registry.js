@@ -17,5 +17,5 @@ export function compareItems(a, b) {
   const ta = getType(a.type);
   const ka = ta?.sortKey?.(a) ?? '';
   const kb = ta?.sortKey?.(b) ?? '';
-  return ka.localeCompare(kb) || a.createdAt.localeCompare(b.createdAt);
+  return ka.localeCompare(kb) || (a.createdAt || '').localeCompare(b.createdAt || '');
 }

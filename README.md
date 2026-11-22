@@ -61,3 +61,9 @@ js/
 | 保存先をクラウドにする | `js/core/storage/` に `load()` / `save()` を持つアダプターを作り、`js/app.js` で差し替える |
 | データの形を変える | `js/core/schema.js` の `SCHEMA_VERSION` を上げ、`migrations` に変換を書く（古いバックアップも読める） |
 | 色を変える | `css/style.css` の `:root` |
+
+## クラウド保存・共有（v0.4〜）
+- Firebase（プロジェクト `matome-3b4f2`）の Authentication（メール / パスワード）と Firestore を使う。設定は `js/core/firebase.js`
+- セキュリティルールは `firestore.rules`。変えた時は Firebase コンソールの Firestore →「ルール」に貼り付けて公開する
+- ログインせずに使うこともできる（この端末だけに保存。従来どおり）
+- テスト: `tests/test_app.py`（端末内保存）、`tests/test_cloud.py`（架空のテスト用アカウントで同期・共有・ルールを確認し、最後に削除）

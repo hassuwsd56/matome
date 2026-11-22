@@ -23,7 +23,7 @@ def item(id, type, **kw):
     return {"id": id, "type": type, "createdAt": NOW, "updatedAt": NOW, **kw}
 
 
-SEED = {KEY: {"version": 1, "meta": {"lastBackupAt": None}, "items": [
+SEED = {"matome:mode": "local", KEY: {"version": 1, "meta": {"lastBackupAt": None}, "items": [
     item("e1", "event", title="架空の会議", date=d(0), allDay=False, startTime="10:00", endTime="11:00", note=""),
     item("t1", "task", title="期限切れタスク", due=d(-2), done=False, note=""),
     item("t2", "task", title="今日のタスク", due=d(0), done=False, note=""),
@@ -148,6 +148,21 @@ with Browser() as b:
         ck.check("上の見出しは隠れる（画面いっぱい）", b.js("getComputedStyle(document.querySelector('.app-header')).display") == "none")
         b.screenshot(os.path.join(OUT, "calendar-nov.png"))
 
+    with ck.step("カレンダーの指の動き"):
+        MONTH = "document.querySelector('.cal-head .month').textContent"
+        b.swipe(200, 600, 200, 250, settle=0.6)
+        ck.check("上下になぞっても画面は動かない", b.js("document.scrollingElement.scrollTop") == 0 and b.js(MONTH) == "2026年11月",
+                 (b.js("document.scrollingElement.scrollTop"), b.js(MONTH)))
+        b.swipe(340, 600, 60, 600, steps=20, settle=0.1)
+        ck.check("左になぞると、すぐには切り替わらず横にすべって動く", b.js(MONTH) == "2026年11月"
+                 and "350ms" in (b.js("document.querySelector('.cal-weeks').style.transition") or ""))
+        b.pump(1.0)
+        ck.check("すべり終わると次の月になる", b.js(MONTH) == "2026年12月", b.js(MONTH))
+        b.swipe(100, 600, 150, 600, steps=10, settle=0.8)
+        ck.check("少しだけ動かした時は月が変わらない", b.js(MONTH) == "2026年12月", b.js(MONTH))
+        b.swipe(60, 600, 340, 600, steps=20, settle=1.2)
+        ck.check("右になぞると前の月に戻る", b.js(MONTH) == "2026年11月", b.js(MONTH))
+
     with ck.step("その日の一覧から編集・追加"):
         b.tap_el("[aria-label^='11月12日']", settle=0.7)
         ck.check("一覧にその日の予定が出る", "旧形式の予定" in b.js("document.querySelector('.day-sheet').innerText"))
@@ -215,6 +230,8 @@ with Browser() as b:
         b.js("__vv.offsetTop = 250; __vv.dispatchEvent(new Event('scroll'))"); b.pump(0.3)
         r2 = b.js("(() => { const s = document.querySelector('.sheet').getBoundingClientRect(); return [s.top, s.bottom] })()")
         ck.check("画面がずれても、シートが見えている範囲に収まる", r2[0] >= 250 - 1 and r2[1] <= 250 + 508 + 1, r2)
+        t2 = b.js("(() => { const t = document.getElementById('f-body').getBoundingClientRect(); return [t.top, t.bottom] })()")
+        ck.check("画面がずれても、本文欄が見えている範囲（キーボードの上）に収まる", t2[0] >= 250 - 1 and t2[1] <= 250 + 508 + 1, t2)
         b.js("__vv.offsetTop = 0; __vv.dispatchEvent(new Event('scroll'))"); b.pump(0.3)
         # v0.3: 本文を入力しても画面が動かないこと（本文欄がキーボードの上に収まり、欄の中でスクロールする）
         TA = "(() => { const t = document.getElementById('f-body').getBoundingClientRect(); const sb = document.querySelector('.sheet-body'); return [t.top, t.bottom, sb.scrollHeight - sb.clientHeight] })()"

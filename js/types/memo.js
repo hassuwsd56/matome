@@ -21,7 +21,7 @@ export default {
       title: 'メモ',
       order: 40,
       filter: () => true,
-      sort: (a, b) => b.updatedAt.localeCompare(a.updatedAt),
+      sort: (a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''),
       limit: 3,
       more: { label: 'メモをすべて見る', view: 'memos' },
       empty: null,
