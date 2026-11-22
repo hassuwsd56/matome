@@ -1,40 +1,7 @@
 import { h } from '../core/dom.js';
 import { allTypes, getType } from '../types/registry.js';
 import { toast } from './toast.js';
-
-// シート表示中は背面ページを固定する（iPhone では overflow:hidden だけでは背面がスクロールする）
-let lockedY = null;
-function lockScroll() {
-  if (lockedY !== null) return;
-  lockedY = window.scrollY;
-  Object.assign(document.body.style, { position: 'fixed', top: `-${lockedY}px`, left: '0', right: '0', width: '100%' });
-}
-function unlockScroll() {
-  if (lockedY === null) return;
-  const y = lockedY;
-  lockedY = null;
-  Object.assign(document.body.style, { position: '', top: '', left: '', right: '', width: '' });
-  window.scrollTo(0, y);
-}
-
-// キーボードが出たら、シートを「見えている範囲（キーボードの上）」に収める。
-// iPhone はキーボード表示時に画面全体を上へずらすため、そのままだとシート上部が画面外に出てしまう。
-function fitToVisibleArea(sheet) {
-  const vv = window.visualViewport;
-  if (!vv) return () => {};
-  const update = () => {
-    const hiddenBelow = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
-    sheet.style.bottom = `${hiddenBelow}px`;
-    sheet.style.maxHeight = `calc(${vv.height}px - var(--safe-top) - 16px)`;
-  };
-  update();
-  vv.addEventListener('resize', update);
-  vv.addEventListener('scroll', update);
-  return () => {
-    vv.removeEventListener('resize', update);
-    vv.removeEventListener('scroll', update);
-  };
-}
+import { lockScroll, unlockScroll, fitToVisibleArea } from './sheet.js';
 
 function defaultsFor(type, ctx) {
   const v = {};
@@ -44,11 +11,15 @@ function defaultsFor(type, ctx) {
   return v;
 }
 
+// 本文欄を画面いっぱいに広げる種類か（メモ）
+const isFillType = (type) => type.fields.some((f) => f.fill);
+
 // 追加・編集の入力画面（下から出るシート）。項目は種類の fields から自動で作る。
 export function openEditor(store, { item = null, typeId = null, ctx = {} } = {}) {
   const isNew = !item;
   let type = getType(item?.type ?? typeId ?? allTypes()[0].id);
   let values = isNew ? defaultsFor(type, ctx) : { ...item };
+  if (!isNew && type.normalize) values = type.normalize(values);
 
   const root = document.getElementById('sheet-root');
   const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' });
@@ -58,7 +29,7 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
   root.replaceChildren(backdrop, sheet);
   document.body.classList.add('sheet-open');
   lockScroll();
-  const stopFitting = fitToVisibleArea(sheet);
+  const fitting = fitToVisibleArea(sheet, { fill: () => isFillType(type) });
   requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('open')));
 
   let closed = false;
@@ -66,7 +37,7 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
     if (closed) return;
     closed = true;
     document.activeElement?.blur?.();
-    stopFitting();
+    fitting();
     root.classList.remove('open');
     document.body.classList.remove('sheet-open');
     unlockScroll();
@@ -104,35 +75,87 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
     type = next;
     values = { ...defaultsFor(next, ctx), ...carry };
     render();
+    fitting.update();
+  }
+
+  // 入力欄（key → 要素）。onFieldChange で他の欄の値を直した時に表示も合わせる。
+  const inputs = new Map();
+
+  function changed(key, value) {
+    const prev = values[key];
+    values[key] = value;
+    if (value === prev) return;
+    const patch = type.onFieldChange?.(key, values, prev);
+    if (!patch) return;
+    Object.assign(values, patch);
+    for (const k of Object.keys(patch)) {
+      const el = inputs.get(k);
+      if (el) el.value = patch[k] ?? '';
+    }
+  }
+
+  function control(f, id) {
+    const set = (e) => changed(f.key, e.target.value);
+    let el;
+    if (f.input === 'textarea') {
+      el = h('textarea', { id, rows: f.rows || 4, placeholder: f.placeholder, value: values[f.key] || '', oninput: set });
+    } else if (f.input === 'date' || f.input === 'time') {
+      el = h('input', { id, type: f.input, value: values[f.key] || '', oninput: set, onchange: set });
+    } else {
+      el = h('input', { id, type: 'text', placeholder: f.placeholder, value: values[f.key] || '', oninput: set, enterkeyhint: 'done' });
+    }
+    inputs.set(f.key, el);
+    return el;
   }
 
   function fieldEl(f) {
     const id = `f-${f.key}`;
-    const set = (e) => { values[f.key] = e.target.value; };
 
     if (f.input === 'toggle') {
       return h('label', { class: 'field-toggle' },
         h('span', null, f.label),
         h('input', {
-          type: 'checkbox', class: 'switch', checked: !!values[f.key],
-          onchange: (e) => { values[f.key] = e.target.checked; render(); },
+          type: 'checkbox', id, class: 'switch', checked: !!values[f.key],
+          onchange: (e) => { changed(f.key, e.target.checked); render(); },
         })
       );
     }
 
-    let control;
-    if (f.input === 'textarea') {
-      control = h('textarea', { id, rows: f.rows || 4, placeholder: f.placeholder, value: values[f.key] || '', oninput: set });
-    } else if (f.input === 'date' || f.input === 'time') {
-      const input = h('input', { id, type: f.input, value: values[f.key] || '', oninput: set, onchange: set });
-      control = f.required
-        ? input
-        : h('div', { class: 'with-clear' }, input,
-            h('button', { type: 'button', class: 'link-btn', onclick: () => { values[f.key] = ''; input.value = ''; } }, 'クリア'));
-    } else {
-      control = h('input', { id, type: 'text', placeholder: f.placeholder, value: values[f.key] || '', oninput: set, enterkeyhint: 'done' });
+    const input = control(f, id);
+    const ctl = (f.input === 'date' || f.input === 'time') && !f.required
+      ? h('div', { class: 'with-clear' }, input,
+          h('button', { type: 'button', class: 'link-btn', onclick: () => { changed(f.key, ''); input.value = ''; } }, 'クリア'))
+      : input;
+    return h('div', { class: `field${f.fill ? ' fill' : ''}` }, h('label', { for: id }, f.label), ctl);
+  }
+
+  // group が同じ項目（例: 開始日と開始時刻）は 1 行に並べる
+  function groupEl(label, fields) {
+    return h('div', { class: 'field' },
+      h('label', { for: `f-${fields[0].key}` }, label),
+      h('div', { class: 'field-row' }, fields.map((f) => {
+        const el = control(f, `f-${f.key}`);
+        el.setAttribute('aria-label', f.label);
+        if (f.required || f.input !== 'time') return el;
+        // 時刻は「×」で未定に戻せる
+        return [el, h('button', {
+          type: 'button', class: 'clear-btn', 'aria-label': `${f.label}をクリア`,
+          onclick: () => { changed(f.key, ''); el.value = ''; },
+        }, '×')];
+      })));
+  }
+
+  function formItems() {
+    const out = [];
+    const visible = type.fields.filter((f) => !isHidden(f));
+    for (let i = 0; i < visible.length; i++) {
+      const f = visible[i];
+      if (!f.group) { out.push(fieldEl(f)); continue; }
+      const members = [f];
+      while (visible[i + 1]?.group === f.group) members.push(visible[++i]);
+      out.push(groupEl(f.groupLabel || f.label, members));
     }
-    return h('div', { class: 'field' }, h('label', { for: id }, f.label), control);
+    return out;
   }
 
   function deleteButton() {
@@ -158,6 +181,8 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
   }
 
   function render() {
+    inputs.clear();
+    sheet.classList.toggle('fill', isFillType(type));
     const header = h('div', { class: 'sheet-header' },
       h('button', { type: 'button', class: 'link-btn', onclick: close }, 'キャンセル'),
       h('div', { class: 'sheet-title' }, isNew ? '新規作成' : type.label),
@@ -167,7 +192,7 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
       ? h('div', { class: 'segmented' }, allTypes().map((t) =>
           h('button', { type: 'button', class: `seg${t === type ? ' active' : ''}`, onclick: () => switchType(t) }, t.label)))
       : null;
-    const form = h('div', { class: 'form' }, type.fields.filter((f) => !isHidden(f)).map(fieldEl));
+    const form = h('div', { class: 'form' }, formItems());
     sheet.replaceChildren(header, h('div', { class: 'sheet-body' }, picker, form, isNew ? null : deleteButton()));
   }
 

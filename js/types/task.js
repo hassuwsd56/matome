@@ -27,6 +27,8 @@ export default {
   toggleDone: (it) => (it.done ? { done: false, doneAt: null } : { done: true, doneAt: new Date().toISOString() }),
 
   occursOn: (it, date) => it.due === date,
+  // カレンダーで帯にする期間（期限の日だけ）
+  span: (it) => [it.due, it.due],
 
   sortKey: (it) => `${it.done ? 1 : 0}${it.due || '9999-99-99'}`,
 

@@ -106,27 +106,47 @@ main { max-width: 640px; margin: 0 auto; padding: 4px 16px calc(var(--tabbar-h) 
 }
 .banner button { margin-left: auto; color: var(--warn); font-weight: 600; white-space: nowrap; }
 
-/* ===== カレンダー ===== */
-.cal-head { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; }
-.cal-head .month { flex: 1; font-size: 20px; font-weight: 700; }
+/* ===== カレンダー（画面いっぱいの月表示） ===== */
+body.full-screen .app-header { display: none; }
+body.full-screen main { max-width: none; padding: 0 0 calc(var(--tabbar-h) + var(--safe-bottom)); }
+.cal-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: calc(var(--safe-top) + 10px) 12px 8px;
+}
+.cal-head .month { flex: 1; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .icon-btn { width: 36px; height: 36px; border-radius: 10px; background: var(--surface); font-size: 22px; line-height: 1; display: grid; place-items: center; }
 .pill-btn { padding: 7px 14px; border-radius: 999px; background: var(--surface); color: var(--accent); font-size: 14px; font-weight: 600; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-wd { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 0.5px solid var(--border); }
 .wd { padding: 4px 0; text-align: center; font-size: 12px; color: var(--muted); }
 .wd.sun, .day.sun .num { color: #ff6961; }
 .wd.sat, .day.sat .num { color: #64d2ff; }
 .day.holiday .num { color: #ff6961; }
-.day {
-  min-height: 52px; padding-top: 4px; border-radius: 10px;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-}
+.week { position: relative; border-bottom: 0.5px solid var(--border); }
+.week-days { display: grid; grid-template-columns: repeat(7, 1fr); height: 100%; }
+.day { position: relative; display: flex; flex-direction: column; align-items: center; padding-top: 2px; min-width: 0; }
 .day:active { background: var(--surface); }
-.day .num { width: 32px; height: 32px; line-height: 32px; text-align: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
-.day.other { opacity: 0.35; }
-.day.today .num { color: var(--accent); font-weight: 700; }
-.day.selected .num { background: var(--accent); color: #fff; font-weight: 700; }
-.dots { display: flex; gap: 3px; height: 6px; }
-.dots i { width: 6px; height: 6px; border-radius: 50%; }
+.day.selected { background: rgba(255, 255, 255, 0.07); }
+.day .num { width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; font-size: 13px; font-variant-numeric: tabular-nums; }
+.day.other .num { opacity: 0.4; }
+.day.today .num { background: var(--accent); color: #fff; font-weight: 700; }
+.day .more { position: absolute; bottom: 1px; left: 0; right: 0; text-align: center; font-size: 10px; line-height: 13px; color: var(--muted); }
+/* 予定の帯（タップは下の日付に通す） */
+.week-bars {
+  position: absolute; left: 0; right: 0;
+  display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 1px;
+  pointer-events: none;
+}
+.bar {
+  min-width: 0; margin: 0 2px; padding: 0 3px; border-radius: 3px;
+  color: #fff; font-size: 11px; font-weight: 600; line-height: 16px;
+  white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: center;
+}
+.bar.cont-l { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.bar.cont-r { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.bar.t-task { color: #000; }
+.bar.done { opacity: 0.45; text-decoration: line-through; }
+.bar.holiday-bar { background: #8e2c2c; }
+.day-holiday { margin: 0 4px 10px; color: #ff6961; font-size: 14px; font-weight: 600; }
 
 /* ===== 検索・カード・ボタン ===== */
 .search {
@@ -200,6 +220,20 @@ main { max-width: 640px; margin: 0 auto; padding: 4px 16px calc(var(--tabbar-h) 
 }
 .switch:checked { background: var(--c-task); }
 .switch:checked::after { transform: translateX(20px); }
+
+.field-row { display: flex; gap: 8px; }
+.field-row input[type=date] { flex: 1.4; min-width: 0; }
+.field-row input[type=time] { flex: 1; min-width: 0; }
+.clear-btn { flex: none; width: 30px; color: var(--muted); font-size: 22px; }
+
+/* メモ: 本文欄をシートの残りいっぱいに広げる */
+.sheet.fill .sheet-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.sheet.fill .form { flex: 1; min-height: 0; }
+.field.fill { flex: 1; display: flex; flex-direction: column; min-height: 140px; }
+.field.fill textarea { flex: 1; min-height: 0; resize: none; }
+
+.more-row { width: 100%; text-align: left; color: var(--accent); font-size: 15px; }
+.more-row .chev { color: var(--muted); font-size: 20px; }
 
 .danger-btn { display: block; width: 100%; margin-top: 28px; padding: 13px; border-radius: 12px; background: rgba(255, 69, 58, 0.12); color: var(--danger); font-weight: 600; }
 

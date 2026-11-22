@@ -20,10 +20,16 @@ export default {
       .sort((a, b) => a.order - b.order);
 
     const blocks = sections.map((s) => {
-      const list = items.filter((it) => it.type === s.type.id && s.filter(it, today)).sort(compareItems);
-      if (!list.length && s.empty == null) return null;
+      const all = items.filter((it) => it.type === s.type.id && s.filter(it, today)).sort(s.sort || compareItems);
+      if (!all.length && s.empty == null) return null;
+      // limit: 件数を絞る。more: 「すべて見る」で別の画面へ
+      const list = s.limit ? all.slice(0, s.limit) : all;
+      const more = s.more
+        ? h('button', { type: 'button', class: 'row more-row', onclick: () => ctx.navigate(s.more.view) },
+            h('div', { class: 'row-main' }, `${s.more.label}（${all.length}件）`), h('span', { class: 'chev' }, '›'))
+        : null;
       return section(s.title, list.length
-        ? list.map((it) => itemRow(it, ctx, { context: 'today' }))
+        ? [...list.map((it) => itemRow(it, ctx, { context: 'today' })), more]
         : h('p', { class: 'empty' }, s.empty));
     });
 

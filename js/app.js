@@ -39,6 +39,9 @@ function render({ keepScroll = false } = {}) {
   document.title = titleEl.textContent;
   for (const tab of tabbar.children) tab.classList.toggle('active', tab.dataset.view === view.id);
   fab.hidden = view.fab === false;
+  // 画面ごとの見た目の切り替え用（カレンダーは見出しを隠して画面いっぱいに表示）
+  document.body.dataset.view = view.id;
+  document.body.classList.toggle('full-screen', !!view.fullScreen);
 
   viewEl.replaceChildren();
   view.render(viewEl, ctx);
