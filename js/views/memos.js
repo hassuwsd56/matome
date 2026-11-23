@@ -11,6 +11,7 @@ export default {
   icon: ICONS.memo,
   title: 'メモ',
   fabType: 'memo',
+  tab: false, // 下のタブには出さない（今日画面の「メモをすべて見る」から開く）
 
   render(el, ctx) {
     const listEl = h('div', { class: 'list' });
@@ -31,6 +32,7 @@ export default {
     });
 
     renderList();
-    el.append(search, listEl);
+    const back = h('button', { type: 'button', class: 'back-btn', onclick: () => ctx.navigate('today') }, '‹ 今日');
+    el.append(back, search, listEl);
   },
 };

@@ -298,3 +298,10 @@ body.full-screen main { overflow: hidden; }
 .chip.add { color: var(--accent); }
 .cal-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 14px 0; font-size: 13px; color: var(--muted); }
 .cal-info .link-btn { font-size: 14px; font-weight: 600; }
+
+/* 予定の色・入れた人 */
+.color-dot.auto { width: auto; padding: 0 12px; border-radius: 999px; background: var(--surface-2); color: var(--text); font-size: 13px; border-color: var(--border); }
+.color-dot.auto.on { border-color: #fff; }
+.color-dot:disabled { opacity: 0.6; }
+.created-by { margin: 0 2px; color: var(--muted); font-size: 14px; }
+.back-btn { margin: 4px 0 0; padding: 6px 0; color: var(--accent); font-size: 16px; }

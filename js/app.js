@@ -72,7 +72,7 @@ function start(store) {
   hideAuthScreen();
   if (!started) {
     started = true;
-    tabbar.append(...views.map((v) =>
+    tabbar.append(...views.filter((v) => v.tab !== false).map((v) =>
       h('a', { href: `#/${v.id}`, class: 'tab', dataset: { view: v.id } },
         h('span', { html: v.icon }), h('span', { class: 'tab-label' }, v.label))));
     fab.addEventListener('click', () =>

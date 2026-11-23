@@ -2,6 +2,7 @@ import { h } from '../core/dom.js';
 import { allTypes, getType } from '../types/registry.js';
 import { toast } from './toast.js';
 import { lockScroll, unlockScroll, fitToVisibleArea } from './sheet.js';
+import { EVENT_COLORS } from '../core/colors.js';
 
 function defaultsFor(type, ctx) {
   const v = {};
@@ -99,6 +100,21 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
   function control(f, id) {
     const set = (e) => changed(f.key, e.target.value);
     let el;
+    if (f.input === 'color') {
+      // 色: 「カレンダーの色」（空）か、候補の色から選ぶ
+      const pick = (v) => (e) => {
+        changed(f.key, v);
+        el.querySelectorAll('.color-dot').forEach((x) => x.classList.toggle('on', x === e.currentTarget));
+      };
+      el = h('div', { class: 'color-picker', id },
+        h('button', { type: 'button', class: `color-dot auto${!values[f.key] ? ' on' : ''}`, disabled: readOnly, onclick: pick('') }, f.autoLabel || '自動'),
+        EVENT_COLORS.map((c) => h('button', {
+          type: 'button', class: `color-dot${values[f.key] === c ? ' on' : ''}`, style: `background:${c}`,
+          'aria-label': `色 ${c}`, dataset: { color: c }, disabled: readOnly, onclick: pick(c),
+        })));
+      inputs.set(f.key, el);
+      return el;
+    }
     if (f.input === 'select') {
       el = h('select', { id, onchange: set }, selectOptions(f).map((o) => {
         const opt = h('option', { value: o.value }, o.label);
@@ -207,7 +223,9 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
       ? h('div', { class: 'segmented' }, allTypes().map((t) =>
           h('button', { type: 'button', class: `seg${t === type ? ' active' : ''}`, onclick: () => switchType(t) }, t.label)))
       : null;
-    const form = h('div', { class: 'form' }, formItems());
+    // 共有しているカレンダーの予定は、誰が入れたかを出す
+    const by = !isNew && type.createdByName?.(item, store);
+    const form = h('div', { class: 'form' }, by ? h('p', { class: 'created-by' }, `入れた人：${by}`) : null, formItems());
     sheet.replaceChildren(header, h('div', { class: 'sheet-body' }, picker, form, isNew || readOnly ? null : deleteButton()));
   }
 

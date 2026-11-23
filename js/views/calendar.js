@@ -4,6 +4,7 @@ import { holidayName } from '../core/holidays.js';
 import { allTypes, compareItems, getType } from '../types/registry.js';
 import { openDaySheet } from '../ui/day-sheet.js';
 import { ICONS } from '../ui/icons.js';
+import { itemColor } from '../core/colors.js';
 import { openCalendarSheet, openCreateSheet } from '../features/sharing.js';
 
 // 画面を切り替えても表示中の月・選んだ日を覚えておく
@@ -180,7 +181,7 @@ export default {
         if (b.it?.done) cls.push('done');
         if (b.contL) cls.push('cont-l');
         if (b.contR) cls.push('cont-r');
-        const color = b.it ? (ctx.store.calendar?.(b.it.calendarId)?.color || getType(b.it.type).color) : null;
+        const color = b.it ? itemColor(b.it, ctx.store, getType(b.it.type)) : null;
         return h('div', {
           class: cls.join(' '),
           style: `grid-column:${b.c0 + 1} / ${b.c1 + 2};grid-row:${b.lane + 1};${color ? `background:${color}` : ''}`,

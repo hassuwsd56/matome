@@ -215,7 +215,12 @@ try:
         ck.check("参加できる", wait_for(bb, "document.body.innerText.includes('参加しました') || location.hash === '#/calendar'"))
         add_event(bb, "花子が共有に入れた予定", "テスト共有")
         ck.check("参加した人が共有カレンダーに入れた予定が、オーナーに出る", wait_for(a1, "location.hash = '#/today'; document.body.innerText.includes('花子が共有に入れた予定')"))
-        ck.check("一覧にカレンダー名が出る", "テスト共有" in a1.js("[...document.querySelectorAll('.row')].find(r => r.textContent.includes('花子が共有に入れた予定'))?.innerText || ''"))
+        row = a1.js("[...document.querySelectorAll('.row')].find(r => r.textContent.includes('花子が共有に入れた予定'))?.innerText || ''")
+        ck.check("一覧にカレンダー名と、入れた人の名前が出る", "テスト共有" in row and "テスト花子" in row, row)
+        a1.js("[...document.querySelectorAll('.row')].find(r => r.textContent.includes('花子が共有に入れた予定')).setAttribute('data-test','hk')")
+        a1.tap_el("[data-test=hk]", settle=0.7)
+        ck.check("予定を開くと「入れた人：テスト花子」と出る", "入れた人：テスト花子" in (a1.js("document.querySelector('.created-by')?.textContent") or ""))
+        a1.tap_el(".sheet-header .link-btn", settle=0.5)
         ck.check("テスト共有だけに参加した段階では、マイカレンダーの予定は見えない", "ログイン前の予定" not in text(bb))
         # 今回の指摘: マイカレンダーに招待されると、招待前からあった予定も見える
         bb.js(f"location.href = '{local(url_my)}'"); bb.pump(1.0)

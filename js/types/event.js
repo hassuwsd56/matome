@@ -47,6 +47,7 @@ export default {
         return opts;
       },
     },
+    { key: 'color', label: '色', input: 'color', autoLabel: 'カレンダーの色', default: '' },
     { key: 'allDay', label: '終日', input: 'toggle', default: false },
     { key: 'date', label: '開始日', input: 'date', required: true, group: 'start', groupLabel: '開始', default: (ctx) => ctx.date || todayStr() },
     { key: 'startTime', label: '開始時刻', input: 'time', group: 'start', hiddenWhen: (v) => v.allDay },
@@ -94,6 +95,13 @@ export default {
   sortKey: (it) => (isMultiDay(it) ? `0${it.date}` : it.allDay ? '1' : it.startTime ? `2${it.startTime}` : '3'),
 
   rowInfo: (it) => ({ title: it.title, sub: timeRange(it) }),
+
+  // 2 人以上で共有しているカレンダーの予定なら、入れた人の名前（それ以外は null）
+  createdByName(it, store) {
+    const cal = it.calendarId && store.calendar?.(it.calendarId);
+    if (!cal || (cal.memberIds?.length || 0) < 2 || !it.createdBy) return null;
+    return cal.names?.[it.createdBy] || null;
+  },
 
   // 「今日」画面に出すセクション
   todaySections: [

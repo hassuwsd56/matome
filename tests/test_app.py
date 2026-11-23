@@ -74,7 +74,9 @@ with Browser() as b:
     # ---------- 既存機能（回帰） ----------
     with ck.step("今日画面"):
         ck.check("今日画面に予定が出る", "架空の会議" in b.js("document.body.innerText"))
-        ck.check("タブが4つある", b.js("document.querySelectorAll('.tab').length") == 4)
+        ck.check("タブが3つ（今日・カレンダー・設定）で、メモのタブはない",
+                 b.js("[...document.querySelectorAll('.tab')].map(t => t.textContent)") == ["今日", "カレンダー", "設定"],
+                 b.js("[...document.querySelectorAll('.tab')].map(t => t.textContent)"))
 
     # ---------- 修正3: タスクの表示 ----------
     with ck.step("タスク表示"):
@@ -213,6 +215,9 @@ with Browser() as b:
         b.screenshot(os.path.join(OUT, "today-memos.png"), full=True)
         b.tap_el(".more-row", settle=0.5)
         ck.check("「すべて見る」でメモ画面へ移る", b.js("location.hash") == "#/memos")
+        b.tap_el(".back-btn", settle=0.5)
+        ck.check("メモ画面の「‹ 今日」で今日画面に戻る", b.js("location.hash") == "#/today")
+        b.js("location.hash = '#/memos'"); b.pump(0.4)
 
     # ---------- 修正2: メモ作成時のスクロール ----------
     with ck.step("メモ作成シート"):
@@ -271,6 +276,28 @@ with Browser() as b:
         ck.check("再読み込み後もメモが残る", "テストで作ったメモ" in b.js("document.body.innerText"))
         b.js("location.hash = '#/settings'"); b.pump(0.4)
         ck.check("設定画面が表示される", "バックアップを書き出す" in b.js("document.body.innerText"))
+
+    with ck.step("メモが3件以下"):
+        b.js(f"(() => {{ const d = JSON.parse(localStorage.getItem('{KEY}')); let n = 0; d.items = d.items.filter(i => i.type !== 'memo' || n++ < 3); localStorage.setItem('{KEY}', JSON.stringify(d)); }})()")
+        b.js("location.hash = '#/today'"); b.reload()
+        ck.check("メモが3件以下なら「すべて見る」は出ない",
+                 len(b.js(f"({SECTION_TITLES})('メモ')") or []) == 3 and not b.exists(".more-row"))
+
+    # ---------- v0.6: 予定の色 ----------
+    with ck.step("予定の色"):
+        b.tap_el("#fab", settle=0.7)
+        b.type_text("#f-title", "色つきの予定")
+        ck.check("色の欄がある（最初は自動）", b.exists("#f-color .color-dot.auto.on"))
+        b.tap_el("#f-color [data-color='#ff375f']", settle=0.2)
+        b.tap_el(".sheet-header .link-btn.strong", settle=0.7)
+        ev = b.js(f"JSON.parse(localStorage.getItem('{KEY}')).items.find(i => i.title === '色つきの予定')")
+        ck.check("選んだ色が保存される", bool(ev) and ev.get("color") == "#ff375f", ev)
+        dot = b.js("getComputedStyle([...document.querySelectorAll('.row')].find(r => r.textContent.includes('色つきの予定')).querySelector('.type-dot')).backgroundColor")
+        ck.check("一覧の印が選んだ色になる", dot == "rgb(255, 55, 95)", dot)
+        b.js("location.hash = '#/calendar'"); b.pump(0.3)
+        b.tap_el(".pill-btn", settle=0.6)  # 今日の月へ
+        bar = b.js("(() => { const e = [...document.querySelectorAll('.bar')].find(x => x.textContent === '色つきの予定'); return e ? getComputedStyle(e).backgroundColor : null })()")
+        ck.check("カレンダーの帯が選んだ色になる", bar == "rgb(255, 55, 95)", bar)
 
     ck.check("JSエラーなし", not b.errors, b.errors)
 

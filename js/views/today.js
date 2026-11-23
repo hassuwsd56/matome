@@ -24,7 +24,8 @@ export default {
       if (!all.length && s.empty == null) return null;
       // limit: 件数を絞る。more: 「すべて見る」で別の画面へ
       const list = s.limit ? all.slice(0, s.limit) : all;
-      const more = s.more
+      // 「すべて見る」は、表示しきれない時（件数が limit より多い時）だけ
+      const more = s.more && s.limit && all.length > s.limit
         ? h('button', { type: 'button', class: 'row more-row', onclick: () => ctx.navigate(s.more.view) },
             h('div', { class: 'row-main' }, `${s.more.label}（${all.length}件）`), h('span', { class: 'chev' }, '›'))
         : null;
