@@ -34,15 +34,18 @@ export default {
   // group が同じ項目は 1 行に並ぶ（開始日＋開始時刻、終了日＋終了時刻）
   fields: [
     { key: 'title', label: 'タイトル', input: 'text', required: true, placeholder: '例: 歯医者' },
-    // 入れるカレンダー（共有カレンダーがある時だけ表示。編集できるカレンダーだけ選べる）
+    // 入れるカレンダー（ログインしている時だけ表示。編集できるカレンダーだけ選べる）
     {
       key: 'calendarId', label: 'カレンダー', input: 'select', default: (ctx) => ctx.calendarId || '',
-      options: (store, item) => [
-        { value: '', label: '自分だけ' },
-        ...store.calendars()
-          .filter((c) => ['owner', 'editor'].includes(store.roleIn?.(c.id)) || c.id === item?.calendarId)
-          .map((c) => ({ value: c.id, label: c.name })),
-      ],
+      options: (store, item) => {
+        if (!store.isCloud) return [];
+        const opts = store.calendars()
+          .filter((c) => ['owner', 'editor'].includes(store.roleIn(c.id)) || c.id === item?.calendarId)
+          .map((c) => ({ value: c.id, label: c.name }));
+        // マイカレンダーがまだ作られていない時（初回・電波なし）は、仮の選択肢を出す
+        if (!store.defaultCalendarId()) opts.unshift({ value: '', label: 'マイカレンダー' });
+        return opts;
+      },
     },
     { key: 'allDay', label: '終日', input: 'toggle', default: false },
     { key: 'date', label: '開始日', input: 'date', required: true, group: 'start', groupLabel: '開始', default: (ctx) => ctx.date || todayStr() },

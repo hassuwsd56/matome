@@ -70,6 +70,7 @@ export class Store {
   calendars() { return []; }
   calendar() { return null; }
   canEdit() { return true; }
+  defaultCalendarId() { return ''; }
 
   snapshot() {
     return JSON.parse(JSON.stringify(this.data));

@@ -4,9 +4,12 @@ import { holidayName } from '../core/holidays.js';
 import { allTypes, compareItems, getType } from '../types/registry.js';
 import { openDaySheet } from '../ui/day-sheet.js';
 import { ICONS } from '../ui/icons.js';
+import { openCalendarSheet, openCreateSheet } from '../features/sharing.js';
 
 // 画面を切り替えても表示中の月・選んだ日を覚えておく
-const state = { month: null, selected: null, slideFrom: null }; // month: "YYYY-MM"、slideFrom: 月を変えた時に新しい月が入ってくる向き
+const FILTER_KEY = 'matome:calFilter';
+// filter: 'all'（すべてのカレンダー）か、表示するカレンダーの ID
+const state = { month: null, selected: null, slideFrom: null, filter: localStorage.getItem(FILTER_KEY) || 'all' }; // month: "YYYY-MM"、slideFrom: 月を変えた時に新しい月が入ってくる向き
 
 // 週の行の中の寸法（px）: 日付の数字の高さ・帯 1 本の高さ・「+2」の高さ
 const NUM_H = 24;
@@ -71,7 +74,11 @@ export default {
   icon: ICONS.calendar,
   title: () => { init(); const [y, m] = state.month.split('-').map(Number); return `${y}年${m}月`; },
   fullScreen: true, // 上の見出しを隠し、画面いっぱいに表示する
-  fabContext: () => ({ date: state.selected }),
+  fabContext: () => {
+    const c = { date: state.selected };
+    if (state.filter !== 'all' && lastCtx?.store.canEdit({ calendarId: state.filter })) c.calendarId = state.filter;
+    return c;
+  },
 
   render(el, ctx) {
     lastCtx = ctx;
@@ -83,10 +90,21 @@ export default {
     const weeks = Math.ceil((first.getDay() + daysInMonth) / 7);
     const gridStart = toDateStr(new Date(y, m - 1, 1 - first.getDay()));
 
+    const store = ctx.store;
+    const cals = store.calendars();
+    if (state.filter !== 'all' && !cals.some((c) => c.id === state.filter)) state.filter = 'all';
+    const myCal = store.defaultCalendarId();
+    // 表示中のカレンダーに入っている物だけ出す（タスクはマイカレンダーと「すべて」に出す）
+    const visible = (it) => {
+      if (state.filter === 'all') return true;
+      if (it.type !== 'event') return state.filter === myCal;
+      return (it.calendarId || myCal) === state.filter;
+    };
     const types = allTypes().filter((t) => t.occursOn && t.span);
-    const items = ctx.store.items((it) => types.some((t) => t.id === it.type));
+    const items = store.items((it) => types.some((t) => t.id === it.type) && visible(it));
 
     const go = (patch) => { Object.assign(state, patch); ctx.rerender(); };
+    const setFilter = (f) => { localStorage.setItem(FILTER_KEY, f); go({ filter: f }); };
 
     const head = h('div', { class: 'cal-head' },
       h('div', { class: 'month' }, `${y}年${m}月`),
@@ -97,7 +115,24 @@ export default {
     const wdRow = h('div', { class: 'cal-wd' }, WEEKDAYS.map((w, i) =>
       h('div', { class: `wd${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}` }, w)));
     const weeksEl = h('div', { class: 'cal-weeks' });
-    const wrap = h('div', { class: 'cal' }, head, wdRow, weeksEl); // 指の動きはこの中だけで扱う
+    // カレンダーの切り替え（ログインしている時だけ）
+    let chips = null;
+    if (store.isCloud) {
+      const chip = (id, label, color) => h('button', {
+        type: 'button', class: `chip${state.filter === id ? ' on' : ''}`, dataset: { filter: id },
+        style: color ? `--chip:${color}` : null, onclick: () => setFilter(id),
+      }, color ? h('i', { class: 'chip-dot' }) : null, label);
+      const cur = state.filter !== 'all' ? store.calendar(state.filter) : null;
+      chips = h('div', { class: 'cal-bar' },
+        h('div', { class: 'cal-chips' },
+          chip('all', 'すべて'),
+          cals.map((c) => chip(c.id, c.name, c.color)),
+          h('button', { type: 'button', class: 'chip add', id: 'chip-create', onclick: () => openCreateSheet(ctx) }, '＋ 作成')),
+        cur ? h('div', { class: 'cal-info' },
+          h('span', null, `${cur.memberIds.length > 1 ? `${cur.memberIds.length}人で共有中` : '自分だけ'}・${{ owner: 'オーナー', editor: '編集できる', viewer: '見るだけ' }[store.roleIn(cur.id)] || ''}`),
+          h('button', { type: 'button', class: 'link-btn', id: 'cal-manage', onclick: () => openCalendarSheet(ctx, cur.id) }, '共有・設定 ›')) : null);
+    }
+    const wrap = h('div', { class: 'cal' }, head, chips, wdRow, weeksEl); // 指の動きはこの中だけで扱う
     el.append(wrap);
 
     // 画面の残りの高さを週の数で割って、1 週の高さを決める
@@ -131,7 +166,7 @@ export default {
           type: 'button',
           class: cls.join(' '),
           'aria-label': holiday ? `${formatDateJa(ds)} ${holiday}` : formatDateJa(ds),
-          onclick: () => { state.selected = ds; el.querySelector('.day.selected')?.classList.remove('selected'); days[i].classList.add('selected'); openDaySheet(ds, ctx); },
+          onclick: () => { state.selected = ds; el.querySelector('.day.selected')?.classList.remove('selected'); days[i].classList.add('selected'); openDaySheet(ds, ctx, { visible, calendarId: state.filter !== 'all' && store.canEdit({ calendarId: state.filter }) ? state.filter : null }); },
         },
           h('span', { class: 'num' }, d.getDate()),
           hidden[i] ? h('span', { class: 'more' }, `+${hidden[i]}`) : null
@@ -175,11 +210,13 @@ export default {
     let sx = 0, sy = 0, dx = 0, lock = null;
     wrap.addEventListener('touchstart', (e) => {
       sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; lock = null;
+      if (e.target.closest('.cal-chips')) lock = 'chips'; // ボタンの列は横にスクロールさせる（月は変えない）
       weeksEl.style.transition = 'none';
     }, { passive: true });
     wrap.addEventListener('touchmove', (e) => {
       const x = e.touches[0].clientX - sx;
       const y = e.touches[0].clientY - sy;
+      if (lock === 'chips') return;
       if (!lock && (Math.abs(x) > 8 || Math.abs(y) > 8)) lock = Math.abs(x) > Math.abs(y) ? 'h' : 'v';
       if (!lock) return;
       e.preventDefault(); // 画面が上下に動かないようにする

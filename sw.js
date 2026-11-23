@@ -1,6 +1,6 @@
 // オフライン対応用の Service Worker
 // 方針: ネットにつながる時は最新版を取得してキャッシュを更新、つながらない時はキャッシュを使う
-const CACHE = 'matome-v4';
+const CACHE = 'matome-v5';
 const SHELL = ['./', './index.html', './css/style.css', './js/app.js', './manifest.webmanifest', './icons/icon-180.png'];
 
 self.addEventListener('install', (e) => {

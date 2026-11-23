@@ -6,7 +6,8 @@ import { itemRow } from './item-row.js';
 import { lockScroll, unlockScroll, fitToVisibleArea } from './sheet.js';
 
 // カレンダーで日付をタップした時に下から出る「その日の一覧」
-export function openDaySheet(date, ctx) {
+// opts.visible: 表示中のカレンダーで絞り込む関数、opts.calendarId: 「＋ 追加」で入れるカレンダー
+export function openDaySheet(date, ctx, opts = {}) {
   const root = document.getElementById('sheet-root');
   const sheet = h('div', { class: 'sheet day-sheet', role: 'dialog', 'aria-modal': 'true' });
   const openedAt = Date.now();
@@ -37,7 +38,7 @@ export function openDaySheet(date, ctx) {
 
   function renderList() {
     const items = ctx.store
-      .items((it) => types.some((t) => t.id === it.type && t.occursOn(it, date)))
+      .items((it) => types.some((t) => t.id === it.type && t.occursOn(it, date)) && (!opts.visible || opts.visible(it)))
       .sort(compareItems);
     body.replaceChildren(...compact(
       holiday ? h('p', { class: 'day-holiday' }, holiday) : null,
@@ -53,7 +54,7 @@ export function openDaySheet(date, ctx) {
     h('div', { class: 'sheet-header' },
       h('button', { type: 'button', class: 'link-btn', onclick: close }, '閉じる'),
       h('div', { class: 'sheet-title' }, formatDateJa(date)),
-      h('button', { type: 'button', class: 'link-btn strong', onclick: () => sheetCtx.openEditor({ ctx: { date } }) }, '＋ 追加')
+      h('button', { type: 'button', class: 'link-btn strong', onclick: () => sheetCtx.openEditor({ ctx: opts.calendarId ? { date, calendarId: opts.calendarId } : { date } }) }, '＋ 追加')
     ),
     body
   );

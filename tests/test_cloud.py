@@ -69,6 +69,10 @@ def put_event(token, cid, eid, title):
 def cleanup_account(mail):
     token, uid = sign_in(mail)
     if not token: return
+    st, d = http("GET", f"{FS}/calendars/my-{uid}/events?pageSize=300", token=token)
+    for doc in d.get("documents", []):
+        http("DELETE", f"https://firestore.googleapis.com/v1/{doc['name']}", token=token)
+    http("DELETE", f"{FS}/calendars/my-{uid}", token=token)
     st, d = http("GET", f"{FS}/users/{uid}/items?pageSize=300", token=token)
     for doc in d.get("documents", []):
         http("DELETE", f"https://firestore.googleapis.com/v1/{doc['name']}", token=token)
@@ -147,8 +151,13 @@ try:
         ck.check("登録するとアプリに入れる", logged_in(a1))
         ck.check("ログイン前のデータがクラウドに移る", wait_for(a1, "document.body.innerText.includes('ログイン前の予定')"))
         token_a, uid_a = sign_in(A)
-        st, d = http("GET", f"{FS}/users/{uid_a}/items/local-{RUN}", token=token_a)
-        ck.check("移したデータがクラウドに保存されている", st == 200, st)
+        my_a = f"my-{uid_a}"
+        ok = False
+        for _ in range(30):
+            if http("GET", f"{FS}/calendars/{my_a}/events/local-{RUN}", token=token_a)[0] == 200: ok = True; break
+            time.sleep(0.5)
+        ck.check("マイカレンダーが作られ、移したデータがそこに保存されている", ok)
+        ck.check("どのカレンダーにも入っていない予定は残らない", http("GET", f"{FS}/users/{uid_a}/items/local-{RUN}", token=token_a)[0] == 404)
 
     with ck.step("iPhone と PC の同期"):
         add_event(a1, "iPhoneで追加した予定")
@@ -163,6 +172,16 @@ try:
         a1.tap_el(".danger-btn", settle=0.2); a1.tap_el(".danger-btn", settle=0.7)
         ck.check("iPhone で消すと PC からも消える", wait_for(a2, "!document.body.innerText.includes('PCで追加した予定')"))
         ck.check("クラウド保存中はバックアップの注意を出さない", not a1.exists(".banner"))
+
+    with ck.step("マイカレンダーの招待リンク"):
+        a1.js("location.hash = '#/settings'"); a1.pump(0.6)
+        tap(a1, f"[data-cal='{my_a}']", settle=1.2)
+        ck.check("マイカレンダーの管理画面が開き、まだ自分だけ", wait_for(a1, "document.querySelector('.cal-sheet')?.innerText.includes('まだ自分だけ')"))
+        ck.check("マイカレンダーは削除できない", not a1.exists(".cal-sheet .danger-btn"))
+        tap(a1, "#invite-create", settle=1.0)
+        url_my = a1.js("document.getElementById('invite-url')?.value")
+        ck.check("マイカレンダーの招待リンクができる", bool(url_my) and my_a in url_my, url_my)
+        a1.tap_el(".cal-sheet .sheet-header .link-btn", settle=0.5)
 
     with ck.step("共有カレンダーを作って招待"):
         a1.js("location.hash = '#/settings'"); a1.pump(0.5)
@@ -197,9 +216,14 @@ try:
         add_event(bb, "花子が共有に入れた予定", "テスト共有")
         ck.check("参加した人が共有カレンダーに入れた予定が、オーナーに出る", wait_for(a1, "location.hash = '#/today'; document.body.innerText.includes('花子が共有に入れた予定')"))
         ck.check("一覧にカレンダー名が出る", "テスト共有" in a1.js("[...document.querySelectorAll('.row')].find(r => r.textContent.includes('花子が共有に入れた予定'))?.innerText || ''"))
-        add_event(a1, "太郎だけの予定")
-        bb.pump(3)
-        ck.check("自分だけの予定は、共有相手に見えない", "太郎だけの予定" not in text(bb))
+        ck.check("テスト共有だけに参加した段階では、マイカレンダーの予定は見えない", "ログイン前の予定" not in text(bb))
+        # 今回の指摘: マイカレンダーに招待されると、招待前からあった予定も見える
+        bb.js(f"location.href = '{local(url_my)}'"); bb.pump(1.0)
+        ck.check("マイカレンダーの招待で参加の確認が出る", wait_for(bb, "!!document.getElementById('join-ok')", 15))
+        bb.tap_el("#join-ok", settle=1.0)
+        ck.check("招待前からあった予定（ログイン前の予定・iPhoneで追加した予定）が見える",
+                 wait_for(bb, "location.hash = '#/today'; document.body.innerText.includes('ログイン前の予定') && document.body.innerText.includes('iPhoneで追加した予定')"))
+        add_event(a1, "太郎のマイカレンダーの予定")
 
     with ck.step("招待リンクで参加（見るだけ）"):
         cc.open(local(url_view))
@@ -207,6 +231,8 @@ try:
         ck.check("見るだけのリンクで参加の確認が出る", wait_for(cc, "!!document.getElementById('join-ok')", 25) and "見るだけ" in text(cc))
         cc.tap_el("#join-ok", settle=1.0)
         ck.check("共有の予定が見える", wait_for(cc, "location.hash = '#/today'; document.body.innerText.includes('花子が共有に入れた予定')"))
+        ck.check("招待されていないカレンダー（太郎のマイカレンダー）の予定は見えない",
+                 "太郎のマイカレンダーの予定" not in text(cc) and "iPhoneで追加した予定" not in text(cc))
         cc.js("[...document.querySelectorAll('.row')].find(r => r.textContent.includes('花子が共有に入れた予定')).setAttribute('data-test','ev')")
         cc.tap_el("[data-test=ev]", settle=0.7)
         ck.check("見るだけの予定は「見るだけ」で開き、保存・削除がない",
@@ -218,6 +244,26 @@ try:
         opts = cc.js("[...(document.getElementById('f-calendarId')?.options || [])].map(o => o.textContent)")
         ck.check("見るだけのカレンダーは、予定の追加先に出ない", "テスト共有" not in (opts or []), opts)
         cc.tap_el(".sheet-header .link-btn", settle=0.5)
+
+    with ck.step("カレンダーの切り替え"):
+        a1.js("location.hash = '#/calendar'"); a1.pump(0.8)
+        chips = a1.js("[...document.querySelectorAll('.cal-chips .chip')].map(e => e.textContent)")
+        ck.check("「すべて」「マイカレンダー」「テスト共有」「＋ 作成」が並ぶ", chips == ["すべて", "マイカレンダー", "テスト共有", "＋ 作成"], chips)
+        BARS = "[...document.querySelectorAll('.bar')].map(e => e.textContent)"
+        a1.tap_el(f".chip[data-filter='{cid}']", settle=0.6)
+        bars = a1.js(BARS)
+        ck.check("「テスト共有」を選ぶと、その予定だけ出る", "花子が共有に入れた予定" in bars and "太郎のマイカレンダーの予定" not in bars, bars)
+        ck.check("選んだカレンダーの共有状況が出る", "人で共有中" in a1.js("document.querySelector('.cal-info').innerText"))
+        a1.tap_el("#fab", settle=0.7)
+        ck.check("選んでいるカレンダーが、新しい予定の入れ先になる", a1.js("document.getElementById('f-calendarId').value") == cid)
+        a1.tap_el(".sheet-header .link-btn", settle=0.5)
+        a1.screenshot(os.path.join(OUT, "calendar-filter.png"))
+        a1.tap_el(".chip[data-filter='all']", settle=0.6)
+        bars = a1.js(BARS)
+        ck.check("「すべて」で全部のカレンダーの予定が出る", "花子が共有に入れた予定" in bars and "太郎のマイカレンダーの予定" in bars, bars)
+        a1.tap_el("#fab", settle=0.7)
+        ck.check("「すべて」の時の新しい予定の入れ先はマイカレンダー", a1.js("document.getElementById('f-calendarId').value") == my_a)
+        a1.tap_el(".sheet-header .link-btn", settle=0.5)
 
     with ck.step("サーバー側のルール"):
         token_c, uid_c = sign_in(C)

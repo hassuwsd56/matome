@@ -25,7 +25,8 @@ let current = null;
 const ctx = {
   store: null,
   fb: null,
-  openEditor: (opts) => openEditor(ctx.store, opts),
+  // 新しい予定の入れ先は、指定がなければマイカレンダー
+  openEditor: (opts = {}) => openEditor(ctx.store, { ...opts, ctx: { calendarId: ctx.store.defaultCalendarId(), ...(opts.ctx || {}) } }),
   navigate: (id) => { location.hash = `#/${id}`; },
   rerender: () => render({ keepScroll: true }),
   // ログインせずに使っている時に、ログイン画面へ
@@ -135,6 +136,8 @@ async function startCloud(fb, user) {
     console.error(e);
   }
   start(store);
+  // マイカレンダーの用意と、どのカレンダーにも入っていない予定の移動（裏で行う）
+  store.ensureDefaultCalendar().catch((e) => console.error(e));
 }
 
 async function main() {

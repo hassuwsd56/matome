@@ -159,8 +159,8 @@ export function openEditor(store, { item = null, typeId = null, ctx = {} } = {})
 
   function formItems() {
     const out = [];
-    // 選択肢が 1 つしかない select（共有カレンダーがない時のカレンダー欄）は出さない
-    const visible = type.fields.filter((f) => !isHidden(f) && !(f.input === 'select' && selectOptions(f).length <= 1));
+    // 選択肢のない select（ログインしていない時のカレンダー欄）は出さない
+    const visible = type.fields.filter((f) => !isHidden(f) && !(f.input === 'select' && selectOptions(f).length === 0));
     for (let i = 0; i < visible.length; i++) {
       const f = visible[i];
       if (!f.group) { out.push(fieldEl(f)); continue; }

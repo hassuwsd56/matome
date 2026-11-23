@@ -60,7 +60,9 @@ export class CloudStore {
     }, fail('items', a1)));
 
     const q = F.query(F.collection(db, 'calendars'), F.where('memberIds', 'array-contains', this.uid));
-    this.unsubs.push(F.onSnapshot(q, (snap) => {
+    // includeMetadataChanges: サーバーの最新と確認できたか（calsSynced）を知るため
+    this.unsubs.push(F.onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+      if (!snap.metadata.fromCache) this.calsSynced = true;
       const next = new Map(snap.docs.map((d) => [d.id, { ...d.data(), id: d.id }]));
       for (const cid of this.cals.keys()) if (!next.has(cid)) this._stopCalendar(cid);
       this.cals = next;
@@ -155,6 +157,7 @@ export class CloudStore {
   async add(type, fields) {
     const now = new Date().toISOString();
     const item = { ...fields, id: newId(), type, createdAt: now, updatedAt: now };
+    if (type === 'event' && !item.calendarId) item.calendarId = this.defaultCalendarId();
     if (type !== 'event' || !item.calendarId) delete item.calendarId;
     if (item.calendarId) item.createdBy = this.uid;
     this._applyLocal(item);
@@ -255,8 +258,55 @@ export class CloudStore {
   }
 
   // ---------- 共有カレンダー ----------
+  // マイカレンダーを先頭に、あとは作った順
   calendars() {
-    return [...this.cals.values()].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    const my = this.defaultCalId;
+    return [...this.cals.values()].sort((a, b) =>
+      (b.id === my) - (a.id === my) || (a.createdAt || '').localeCompare(b.createdAt || ''));
+  }
+
+  // 自分の「マイカレンダー」の ID（端末が違っても同じになるよう、ユーザー ID から決める）
+  get defaultCalId() {
+    return `my-${this.uid}`;
+  }
+
+  defaultCalendarId() {
+    return this.cals.has(this.defaultCalId) ? this.defaultCalId : '';
+  }
+
+  // マイカレンダーを用意し、どのカレンダーにも入っていない予定をそこへ移す。
+  // サーバーと確認できない時（電波なし）は作らず、次に開いた時にやり直す（2 台で二重に作らないため）。
+  async ensureDefaultCalendar() {
+    const { F, db } = this.fb;
+    const cid = this.defaultCalId;
+    if (!this.cals.has(cid)) {
+      const end = Date.now() + 8000;
+      while (!this.calsSynced && Date.now() < end) await new Promise((r) => setTimeout(r, 200));
+      if (!this.calsSynced) return false;
+      if (!this.cals.has(cid)) {
+        const cal = {
+          name: 'マイカレンダー', color: '#0a84ff', owner: this.uid, memberIds: [this.uid],
+          roles: { [this.uid]: 'owner' }, names: { [this.uid]: this.name }, invites: {}, createdAt: new Date().toISOString(),
+        };
+        this.cals.set(cid, { ...cal, id: cid });
+        this._watchCalendar(cid);
+        this._write(F.setDoc(F.doc(db, 'calendars', cid), cal));
+      }
+    }
+    const loose = [...this.personal.values()].filter((it) => it.type === 'event');
+    for (let i = 0; i < loose.length; i += 200) {
+      const batch = F.writeBatch(db);
+      for (const it of loose.slice(i, i + 200)) {
+        const moved = { ...it, calendarId: cid, createdBy: this.uid };
+        batch.delete(this._ref(it));
+        batch.set(this._ref(moved), this._data(moved));
+        this.personal.delete(it.id);
+        this._applyLocal(moved);
+      }
+      this._write(batch.commit());
+    }
+    this._emit();
+    return true;
   }
 
   calendar(cid) {

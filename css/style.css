@@ -282,3 +282,19 @@ body.auth-mode .tabbar, body.auth-mode .fab { display: none; }
 html:has(body.full-screen), body.full-screen { overflow: hidden; overscroll-behavior: none; height: 100%; }
 body.full-screen main { overflow: hidden; }
 .cal-weeks { will-change: transform; }
+
+/* カレンダーの切り替えボタン（すべて／カレンダーごと） */
+.cal-bar { padding: 0 0 6px; }
+.cal-chips { display: flex; gap: 8px; overflow-x: auto; padding: 0 12px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cal-chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; min-height: 34px; border-radius: 999px;
+  background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap;
+  border: 1.5px solid transparent;
+}
+.chip .chip-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--chip); }
+.chip.on { background: var(--surface-2); border-color: var(--chip, var(--accent)); }
+.chip.add { color: var(--accent); }
+.cal-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 14px 0; font-size: 13px; color: var(--muted); }
+.cal-info .link-btn { font-size: 14px; font-weight: 600; }

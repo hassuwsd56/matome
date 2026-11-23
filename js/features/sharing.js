@@ -9,23 +9,23 @@ export const CAL_COLORS = ['#ff9f0a', '#bf5af2', '#ff375f', '#0fb5ae', '#5e5ce6'
 
 const tsToDate = (t) => (t?.toDate ? t.toDate() : new Date(t));
 
-// 設定画面に出す「共有カレンダー」カード
+// 設定画面に出す「カレンダー」カード
 export function sharingCard(ctx) {
   const store = ctx.store;
   const cals = store.calendars();
   return h('div', { class: 'card' },
-    h('h2', null, '共有カレンダー'),
-    h('p', null, '共有カレンダーに入れた予定は、招待した人と一緒に見られます。自分だけの予定・タスク・メモは共有されません。'),
+    h('h2', null, 'カレンダー'),
+    h('p', null, 'カレンダーは複数作れます。招待したカレンダーの予定は、招待した人と一緒に見られます（招待しなければ自分だけ）。タスク・メモは共有されません。'),
     cals.length
       ? h('div', { class: 'list cal-list' }, cals.map((c) =>
           h('button', { type: 'button', class: 'row', dataset: { cal: c.id }, onclick: () => openCalendarSheet(ctx, c.id) },
             h('span', { class: 'type-dot', style: `background:${c.color}` }),
             h('div', { class: 'row-main' },
               h('div', { class: 'row-title' }, c.name),
-              h('div', { class: 'row-sub' }, `${ROLE_LABEL[store.roleIn(c.id)] || ''}・${c.memberIds.length}人`)),
+              h('div', { class: 'row-sub' }, `${c.memberIds.length > 1 ? `${c.memberIds.length}人で共有中` : '自分だけ'}・${ROLE_LABEL[store.roleIn(c.id)] || ''}`)),
             h('span', { class: 'chev' }, '›'))))
       : null,
-    h('button', { type: 'button', class: 'btn primary', id: 'cal-create', onclick: () => openCreateSheet(ctx) }, '＋ 共有カレンダーを作る')
+    h('button', { type: 'button', class: 'btn primary', id: 'cal-create', onclick: () => openCreateSheet(ctx) }, '＋ カレンダーを作る')
   );
 }
 
@@ -41,11 +41,13 @@ function colorPicker(selected, onPick) {
     })));
 }
 
-function openCreateSheet(ctx) {
-  let color = CAL_COLORS[0];
+export function openCreateSheet(ctx) {
+  // まだ使っていない色を最初に選んでおく
+  const used = new Set(ctx.store.calendars().map((c) => c.color));
+  let color = CAL_COLORS.find((c) => !used.has(c)) || CAL_COLORS[0];
   const name = h('input', { id: 'cal-name', type: 'text', placeholder: '例: 家族', enterkeyhint: 'done' });
   const close = openSheet({
-    title: '共有カレンダーを作る',
+    title: 'カレンダーを作る',
     right: {
       label: '作成',
       onClick: async () => {
@@ -53,7 +55,7 @@ function openCreateSheet(ctx) {
         if (!n) return toast('名前を入力してください');
         const cid = await ctx.store.createCalendar(n, color);
         close();
-        toast(`「${n}」を作りました。招待リンクで相手を招待できます`);
+        toast(`「${n}」を作りました。招待すると共有できます`);
         openCalendarSheet(ctx, cid);
       },
     },
@@ -83,7 +85,7 @@ export function openCalendarSheet(ctx, cid) {
   const store = ctx.store;
   let lastLink = null;
   const close = openSheet({
-    title: store.calendar(cid)?.name || '共有カレンダー',
+    title: store.calendar(cid)?.name || 'カレンダー',
     className: 'cal-sheet',
     build: (body, close) => {
       const render = () => {
@@ -108,7 +110,7 @@ export function openCalendarSheet(ctx, cid) {
         }
 
         // メンバー
-        parts.push(h('h3', { class: 'sub-head' }, `メンバー（${cal.memberIds.length}人）`));
+        parts.push(h('h3', { class: 'sub-head' }, cal.memberIds.length > 1 ? `メンバー（${cal.memberIds.length}人で共有中）` : 'メンバー（まだ自分だけ）'));
         parts.push(h('div', { class: 'list' }, cal.memberIds.map((uid) => {
           const r = cal.roles?.[uid];
           const label = `${cal.names?.[uid] || '（名前なし）'}${uid === store.uid ? '（自分）' : ''}`;
@@ -171,8 +173,8 @@ export function openCalendarSheet(ctx, cid) {
           }
         }
 
-        // 退出・削除
-        parts.push(dangerButton(
+        // 退出・削除（マイカレンダーは消せない）
+        if (cid !== store.defaultCalId) parts.push(dangerButton(
           isOwner ? 'このカレンダーを削除' : 'このカレンダーから抜ける',
           isOwner ? 'もう一度タップで削除（予定もすべて消えます）' : 'もう一度タップで抜ける',
           async () => {
